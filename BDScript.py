@@ -1,11 +1,10 @@
-########################################################################################3
 # Description:
 # This script tabulates species ocurrences and calculate frequencies contained in a spatial data layer for a particular
+########################################################################################3
 # zone. The species ocurrence should be in ESRI shapefile format. To use other formats you should be able to easily 
 # modify the script. The spatial data defining the zones should also be on a ESRI shapefile format.
 
-# The species ocurrence layer, each feature should have full taxonomic information: kingdom, phylum, class, order, family, genus, species, and
-# full scientific names
+# In the species ocurrence layer, each feature should have full taxonomic information: kingdom, phylum, class, order, family, genus, species, and full scientific name
 
 # In the zonal layer, each feature should have a name/unique code stored in an attribute.
 
@@ -20,16 +19,16 @@
 # Expected outputs:
 # This script will do the following:
 # Three folders: One with the individual zonal features. Another folder with the individual species ocurrence features 
-# for each zone. Finally, a folder containing csv files with the tabulated species ocurrence data. 
+# for each zone. A third folder containing csv files with the tabulated species ocurrence data. 
 # Create a field in the zonal data with a simplified name of the zonal feature. Non-ASCII characters are removed
-# For each zonal data, the 
+ 
 
 
 
 ###1. Input Parameters. This is the only section of the script that you should modify. Current values are provided so you see the format of the input
 
 ##Defining the folders and directories
-main_directory = "C:\Users\sebas\Documents\Antioch2017\BiodiversityMap\Python2017\TestData"     #path to directory containing layers
+main_directory = "C:/Users/sebas/Documents/Antioch2017/BiodiversityMap/Python2017/TestData"     #path to directory containing layers
 
 
 # Information on the Zone layer
@@ -52,9 +51,16 @@ bd_phylumfieldname= "phylum"        #name of the field containing the specie's p
 bd_kingdomfieldname = "kingdom"     #name of the field containing the specie's kingdom
 
 
+#IUCN data
+csv_name ="IUCNRedList.csv"
+
+csv_namelong ='file:///'+ main_directory + '/'+csv_name+'?delimiter=,'
+
+
+
 
 #Data provider information
-labtype = labtype = "ogr"       #data provider. OGR is for shapefiles
+labtype  = "ogr"       #data provider. OGR is for shapefiles
 
 
 # Importing necessary modules. You 
@@ -69,7 +75,7 @@ import unicodecsv as csv
 
 ### 2 Loading the zone layer in memory and the layer panel in QGIS 
 
-inter_shpmemory = iface.addVectorLayer(main_directory + "\\" + intersect_shpname,"Zone layer",labtype)
+inter_shpmemory = iface.addVectorLayer(main_directory + "/" + intersect_shpname,"Zone layer",labtype)
 
 
 if not inter_shpmemory:
@@ -124,13 +130,36 @@ inter_shpmemory.updateFields()
 
 ### 3 the GBIF data to the memory and layer panel
 
-specieslayer_mem = iface.addVectorLayer(main_directory + "\\" + bd_shpname,"GBIF layer",labtype)
+specieslayer_mem = iface.addVectorLayer(main_directory + "/" + bd_shpname,"GBIF layer",labtype)
+QgsMapLayerRegistry.instance().addMapLayer(specieslayer_mem)
 
+
+
+# Joining the IUCN layer
+
+UICNcsv = QgsVectorLayer(csv_namelong, 'UICN Red list', 'delimitedtext')
+
+QgsMapLayerRegistry.instance().addMapLayer(UICNcsv)
+
+
+
+###produces the join
+
+shpField='species'
+csvField='species_full'
+joinObject = QgsVectorJoinInfo()
+joinObject.joinLayerId = UICNcsv.id()
+joinObject.joinFieldName = csvField
+joinObject.targetFieldName = shpField
+joinObject.memoryCache = True
+specieslayer_mem.addJoin(joinObject)
+
+print([field.name() for field in specieslayer_mem.pendingFields() ])
 
 ### 4 Create folders to safe all stuff. If the 
-newfolder_zones = main_directory + "\\" + "Zonal_GBIF"
-newfolder_bd = main_directory + "\\" + "GBIF_Ocurrences"
-newfolder_tables = main_directory + "\\" + "GBIF_TablesbyZones"
+newfolder_zones = main_directory + "/" + "Zonal_GBIF"
+newfolder_bd = main_directory + "/" + "GBIF_Ocurrences"
+newfolder_tables = main_directory + "/" + "GBIF_TablesbyZones"
 
 if not os.path.exists(newfolder_zones) or not os.path.exists(newfolder_bd):
     os.makedirs(newfolder_bd)
@@ -171,41 +200,37 @@ for feature in features:
 ### Creates a tabulated list with taxonomic information and number of ocurrences. Than it saves it into a unicode-enabled CSV. Therefore when you open it in a spreadsheet program, choose the encoding at "UTF-8".
     
 for bdzonesnames in names_zonelayer:
-    bdzone = QgsVectorLayer(newfolder_bd + "\\" + bdzonesnames,"Zone layer",labtype)
+    bdzone = QgsVectorLayer(newfolder_bd + "/" + bdzonesnames,"Zone layer",labtype)
     features = bdzone.getFeatures()
     bdz = []
-    table_name= newfolder_tables+"//"+bdzonesnames[0:len(bdzonesnames)-7]+'.csv'
+    table_name= newfolder_tables+"/"+bdzonesnames[0:len(bdzonesnames)-7]+'.csv'
     
     for feature in features:
         species_order = feature[bd_specfieldname]
         #print(species_order)
         
         if not bdz:
-            bdz.append([feature[bd_kingdomfieldname],feature[bd_phylumfieldname],feature[bd_classfieldname],feature[bd_orderfieldname],feature[bd_famifieldname],feature[bd_genusfieldname], feature[bd_specfieldname],feature[bd_sciencenamefieldname], 1])
+            bdz.append([feature[bd_kingdomfieldname],feature[bd_phylumfieldname],feature[bd_classfieldname],feature[bd_orderfieldname],feature[bd_famifieldname],feature[bd_genusfieldname], feature[bd_specfieldname],feature[bd_sciencenamefieldname], feature['UICN Red17'], 1])
                  
         spe_list = [item[6] for item in bdz]
         
         
         if species_order in spe_list:
             ind_sp = spe_list.index(species_order)
-            nums = bdz[ind_sp][8]
-            bdz[ind_sp][8] = nums+1
+            nums = bdz[ind_sp][9]
+            bdz[ind_sp][9] = nums+1
         else:
-            bdz.append([feature[bd_kingdomfieldname],feature[bd_phylumfieldname],feature[bd_classfieldname],feature[bd_orderfieldname],feature[bd_famifieldname],feature[bd_genusfieldname], feature[bd_specfieldname],feature[bd_sciencenamefieldname], 1])
+            bdz.append([feature[bd_kingdomfieldname],feature[bd_phylumfieldname],feature[bd_classfieldname],feature[bd_orderfieldname],feature[bd_famifieldname],feature[bd_genusfieldname], feature[bd_specfieldname],feature[bd_sciencenamefieldname], feature['UICN Red17'] , 1])
                 
-    bdz =  [['Kingdom', 'Phylum', 'Class','Orden', 'Family', 'Genus', 'Species', 'Scientific name', 'Count']]+ bdz[0:len(bdz)]
+    bdz =  [['Kingdom', 'Phylum', 'Class','Orden', 'Family', 'Genus', 'Species', 'Scientific name', 'IUCN status','Count']]+ bdz[0:len(bdz)]
     
     with open(table_name, 'wb') as csvfile:
         a= csv.writer(csvfile,delimiter=',',encoding ='utf-8')  
         a.writerows(bdz)    
             
-            
-#          
-
-    
     
     
 
     
     
-    
+        
